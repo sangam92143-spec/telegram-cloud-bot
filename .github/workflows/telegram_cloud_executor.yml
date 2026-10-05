@@ -13,15 +13,24 @@ on:
         description: 'Task instructions'
         required: false
         default: 'Capture screenshot'
+      task_type:
+        description: 'Task type: browser / youtube / script / bash / composio / remotion'
+        required: false
+        default: 'browser'
 
 jobs:
-  run-browser-task:
+  run-cloud-task:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js (for Remotion)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
@@ -29,17 +38,28 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install dependencies and Playwright Chromium
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install playwright requests
+          pip install -r requirements.txt
+
+      - name: Install Playwright Chromium
+        run: |
           playwright install chromium --with-deps
 
-      - name: Execute Browser Automation
+      - name: Execute Cloud Task
         env:
           TARGET_URL: ${{ github.event.client_payload.target_url || github.event.inputs.target_url || 'https://news.ycombinator.com' }}
           INSTRUCTIONS: ${{ github.event.client_payload.instructions || github.event.inputs.instructions || 'Capture screenshot' }}
+          TASK_TYPE: ${{ github.event.client_payload.task_type || github.event.inputs.task_type || 'browser' }}
+          EXTRA_PARAMS: ${{ toJson(github.event.client_payload.extra_params) || '{}' }}
           TELEGRAM_CHAT_ID: ${{ github.event.client_payload.chat_id || secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
         run: |
           python cloud_runner.py
